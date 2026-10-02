@@ -1,3 +1,4 @@
+## I am unable to test future Revived builds due to the fact I no longer own a Oculus VR headset that is usable. Please make a GitHub issue if you are able to test.
 ## Use the issues tab to suggest features or fixes. I do not know what to fix or add right now.
 # Revived Compatibility Layer
 A fork of Revive meant to fix most issues in Revive, and to add some features. Wikis in this readme point to LibreVR's, it is not obsolete. (yet)
