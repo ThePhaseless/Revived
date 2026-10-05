@@ -9,7 +9,6 @@
 #include <cmath>
 #include <Windows.h>
 #include <Shlobj.h>
-#include <atlbase.h>
 
 ovrResult InputManager::InputErrorToOvrError(vr::EVRInputError error)
 {
