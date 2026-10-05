@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
           arch: 'win64_msvc2019_64'
@@ -38,7 +38,7 @@ jobs:
           vcpkg install --triplet x64-windows-static detours openxr-loader glfw3
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.1
+        uses: microsoft/setup-msbuild@v2
 
       - name: Build ReviveInjector
         shell: cmd
@@ -54,7 +54,7 @@ jobs:
           nmake
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Revive-Binaries
           path: |
