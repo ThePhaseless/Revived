@@ -103,58 +103,64 @@ Rectangle {
     }
 
     Row {
-        x: 80; y: 176; spacing: 16
-        Rectangle {
-            width: 32; height: 32; radius: 16
-            border.color: previewAccent; border.width: 3; color: "transparent"
+        x: 80; y: 176; spacing: 48
+        Row {
+            spacing: 16
             Rectangle {
-                width: 18; height: 18; radius: 9
-                anchors.centerIn: parent
-                color: previewAccent
-                visible: previewRuntime === "OpenVR"
+                width: 32; height: 32; radius: 16
+                border.color: previewAccent; border.width: 3; color: "transparent"
+                Rectangle {
+                    width: 18; height: 18; radius: 9
+                    anchors.centerIn: parent
+                    color: previewAccent
+                    visible: previewRuntime === "OpenVR"
+                }
+                MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenVR" }
             }
-            MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenVR" }
+            Text {
+                text: "OpenVR"; color: settingsPage.textPrimary; font.pixelSize: 26
+                anchors.verticalCenter: parent.verticalCenter
+                MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenVR" }
+            }
         }
-        Text {
-            text: "OpenVR"; color: settingsPage.textPrimary; font.pixelSize: 26
-            anchors.verticalCenter: parent.verticalCenter
+        Row {
+            spacing: 16
+            Rectangle {
+                width: 32; height: 32; radius: 16
+                border.color: previewAccent; border.width: 3; color: "transparent"
+                Rectangle {
+                    width: 18; height: 18; radius: 9
+                    anchors.centerIn: parent
+                    color: previewAccent
+                    visible: previewRuntime === "OpenXR"
+                }
+                MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenXR" }
+            }
+            Text {
+                text: "OpenXR"; color: settingsPage.textPrimary; font.pixelSize: 26
+                anchors.verticalCenter: parent.verticalCenter
+                MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenXR" }
+            }
         }
     }
 
     Row {
-        x: 80; y: 224; spacing: 16
-        Rectangle {
-            width: 32; height: 32; radius: 16
-            border.color: previewAccent; border.width: 3; color: "transparent"
-            Rectangle {
-                width: 18; height: 18; radius: 9
-                anchors.centerIn: parent
-                color: previewAccent
-                visible: previewRuntime === "OpenXR"
-            }
-            MouseArea { anchors.fill: parent; onClicked: previewRuntime = "OpenXR" }
-        }
-        Text {
-            text: "OpenXR"; color: settingsPage.textPrimary; font.pixelSize: 26
-            anchors.verticalCenter: parent.verticalCenter
-        }
-    }
-
-    Row {
-        x: 80; y: 260; spacing: 16
+        x: 80; y: 228; spacing: 16
         visible: previewRuntime === "OpenXR"
         Rectangle {
-            width: 24; height: 24; radius: 4
-            border.color: previewAccent; border.width: 2; color: previewFallback ? previewAccent : "transparent"
-            Text {
+            width: 32; height: 32; radius: 6
+            border.color: previewAccent; border.width: 3; color: "transparent"
+            Rectangle {
+                width: 18; height: 18; radius: 3
                 anchors.centerIn: parent
-                text: "✓"; color: "#0E1A2B"; font.pixelSize: 18; visible: previewFallback
+                color: previewAccent
+                visible: previewFallback
             }
             MouseArea { anchors.fill: parent; onClicked: previewFallback = !previewFallback }
         }
         Text {
             text: "Fallback to OpenVR if OpenXR fails to launch"
-            color: settingsPage.textSecondary; font.pixelSize: 20
+            color: settingsPage.textPrimary; font.pixelSize: 26
             anchors.verticalCenter: parent.verticalCenter
             MouseArea { anchors.fill: parent; onClicked: previewFallback = !previewFallback }
         }
