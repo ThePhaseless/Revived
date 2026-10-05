@@ -1,0 +1,62 @@
+name: Build
+
+on:
+  push:
+    branches: [ update-release ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '5.15.2'
+          arch: 'win64_msvc2019_64'
+
+      - name: Download Oculus SDK
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path download_cache
+          Invoke-WebRequest -Uri 'https://securecdn.oculus.com/binaries/download/?id=4377593722298679' -OutFile 'download_cache\oculus_sdk.zip'
+          Expand-Archive -Path 'download_cache\oculus_sdk.zip' -DestinationPath Externals -Force
+
+      - name: Setup vcpkg dependencies
+        shell: powershell
+        run: |
+          cd $env:VCPKG_INSTALLATION_ROOT
+          git apply "$env:GITHUB_WORKSPACE\fix-vcpkg-openxr-static-loader.patch"
+          .\bootstrap-vcpkg.bat
+          vcpkg integrate install
+          vcpkg install --triplet x64-windows-static detours openxr-loader glfw3
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Build ReviveInjector
+        shell: cmd
+        run: |
+          msbuild Revive.sln /t:ReviveInjector /p:Configuration=Release /p:Platform=x64
+
+      - name: Build ReviveOverlay
+        shell: cmd
+        run: |
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cd ReviveOverlay
+          qmake
+          nmake
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: Revive-Binaries
+          path: |
+            Release/ReviveInjector.exe
+            Release/ReviveOverlay.exe
