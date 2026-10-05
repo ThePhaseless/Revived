@@ -52,6 +52,7 @@ Rectangle {
     property string errorMessage: ""
 
     property string previewRuntime:             AppSettings.runtimePreference === 1 ? "OpenXR" : "OpenVR"
+    property bool previewFallback:              AppSettings.fallbackToOpenVR
     property string previewMetaPath:            AppSettings.metaHorizonPath.length > 0 ? AppSettings.metaHorizonPath : AppSettings.detectedMetaHorizonPath()
     property string previewLibPath:             AppSettings.gamesLibraryPath.length > 0 ? AppSettings.gamesLibraryPath : AppSettings.detectedGamesLibraryPath()
     property string previewAccent:              AppSettings.accentColor
@@ -78,6 +79,7 @@ Rectangle {
 
     function syncPreviewsFromController() {
         previewRuntime             = AppSettings.runtimePreference === 1 ? "OpenXR" : "OpenVR"
+        previewFallback            = AppSettings.fallbackToOpenVR
         previewMetaPath            = AppSettings.metaHorizonPath.length > 0 ? AppSettings.metaHorizonPath : AppSettings.detectedMetaHorizonPath()
         previewLibPath             = AppSettings.gamesLibraryPath.length > 0 ? AppSettings.gamesLibraryPath : AppSettings.detectedGamesLibraryPath()
         previewAccent              = AppSettings.accentColor
@@ -135,6 +137,26 @@ Rectangle {
         Text {
             text: "OpenXR"; color: settingsPage.textPrimary; font.pixelSize: 26
             anchors.verticalCenter: parent.verticalCenter
+        }
+    }
+
+    Row {
+        x: 80; y: 260; spacing: 16
+        visible: previewRuntime === "OpenXR"
+        Rectangle {
+            width: 24; height: 24; radius: 4
+            border.color: previewAccent; border.width: 2; color: previewFallback ? previewAccent : "transparent"
+            Text {
+                anchors.centerIn: parent
+                text: "✓"; color: "#0E1A2B"; font.pixelSize: 18; visible: previewFallback
+            }
+            MouseArea { anchors.fill: parent; onClicked: previewFallback = !previewFallback }
+        }
+        Text {
+            text: "Fallback to OpenVR if OpenXR fails to launch"
+            color: settingsPage.textSecondary; font.pixelSize: 20
+            anchors.verticalCenter: parent.verticalCenter
+            MouseArea { anchors.fill: parent; onClicked: previewFallback = !previewFallback }
         }
     }
 
@@ -426,6 +448,7 @@ Rectangle {
                 anchors.fill: parent
                 onClicked: {
                     AppSettings.setRuntimePreference(previewRuntime === "OpenXR" ? 1 : 0)
+                    AppSettings.setFallbackToOpenVR(previewFallback)
                     AppSettings.setMetaHorizonPath(previewMetaPath)
                     AppSettings.setGamesLibraryPath(previewLibPath)
                     AppSettings.setAccentColor(previewAccent)
