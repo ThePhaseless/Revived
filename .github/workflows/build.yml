@@ -43,7 +43,7 @@ jobs:
       - name: Build ReviveInjector
         shell: cmd
         run: |
-          msbuild Revive.sln /t:ReviveInjector /p:Configuration=Release /p:Platform=x64
+          msbuild Revive.sln /t:ReviveInjector /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
 
       - name: Build ReviveOverlay
         shell: cmd
