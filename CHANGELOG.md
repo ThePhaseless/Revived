@@ -5,6 +5,18 @@ Revived is a fork of [LibreVR/Revive](https://github.com/LibreVR/Revive) picking
 All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- GitHub Actions workflow that builds the runtimes, overlay and installer on every push.
+
+### Fixed
+
+- Revive: input focus, dashboard visibility and connected controllers are re-read on every session status poll, so a game no longer stays without input focus after the SteamVR dashboard closes (Lone Echo II's UI pointer not coming back).
+- Revive: pose conversion falls back to predicting from the current time when the compositor has no poses for the requested frame, no longer divides by a zero time step, reports non-finite poses as untracked and holds the last known pose on tracking loss.
+- Build fixes for VS2022.
+
 ## [3.4.0] - 2026-04-24
 
 ### Added

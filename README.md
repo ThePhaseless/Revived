@@ -7,6 +7,15 @@ This is a compatibility layer between the Oculus SDK and OpenVR/OpenXR. It allow
 
 Fork of [LibreVR/Revive](https://github.com/LibreVR/Revive) by CrossVR and contributors.
 
+## Changes in this fork
+
+This repository ([ThePhaseless/Revived](https://github.com/ThePhaseless/Revived)) is a fork of [cfm-miku-en/Revived](https://github.com/cfm-miku-en/Revived). On top of it, it adds:
+
+- **Input focus after the SteamVR dashboard:** Revive only updated a game's input focus, dashboard state and connected controllers when SteamVR sent an event, and right after the dashboard closes SteamVR can still report that input is unavailable. Games could then stay without input focus for good, e.g. Lone Echo II's UI pointer never came back after opening the dashboard. These values are now re-read every time the game polls its session status.
+- **Sturdier tracking data:** when the compositor can't provide poses for the requested frame they are predicted from the current time instead of using the failed lookup's output, accelerations no longer divide by a zero time step, non-finite poses are reported as untracked, and losing tracking holds the last known pose instead of snapping to the origin.
+- **VS2022 build fixes.**
+- **Automatic builds:** every push is built by [GitHub Actions](https://github.com/ThePhaseless/Revived/actions/workflows/build.yml). Open a run and download the installer or the runtime binaries from its Artifacts section (requires signing in to GitHub). These builds are untested nightlies, the installer will warn about that.
+
 [Refer to the wiki](https://github.com/LibreVR/Revive/wiki) if you run into any problems. You can also find a [community-compiled list of working games on the wiki](https://github.com/LibreVR/Revive/wiki/Compatibility-list), feel free to add your own results.
 
 ## Installation
