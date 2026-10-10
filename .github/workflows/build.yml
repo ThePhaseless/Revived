@@ -1,0 +1,122 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Download Oculus SDK
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'ovr_sdk.zip'
+          Invoke-WebRequest -Uri 'https://securecdn.oculus.com/binaries/download/?id=4377593722298679' -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath Externals -Force
+
+      - name: Prepare vcpkg binary cache
+        id: vcpkg
+        shell: pwsh
+        run: |
+          $cache = Join-Path $env:RUNNER_TEMP 'vcpkg-cache'
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          "VCPKG_DEFAULT_BINARY_CACHE=$cache" >> $env:GITHUB_ENV
+          "path=$cache" >> $env:GITHUB_OUTPUT
+          "commit=$(git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.vcpkg.outputs.path }}
+          key: vcpkg-${{ steps.vcpkg.outputs.commit }}-detours-openxr-loader-glfw3
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        run: |
+          $vcpkg = Join-Path $env:VCPKG_INSTALLATION_ROOT 'vcpkg.exe'
+          & $vcpkg integrate install
+          foreach ($triplet in 'x64-windows-static', 'x86-windows-static') {
+            & $vcpkg install --triplet $triplet detours openxr-loader glfw3
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      # The projects target the VS2019 toolset, but the vcpkg libraries are built with the runner's
+      # VS2022 toolset and don't link against the older one.
+      - name: Build x64
+        run: msbuild Revive.sln /m /t:Build /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143
+
+      - name: Build x86
+        run: msbuild Revive.sln /m /t:Build /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          arch: 'win64_msvc2019_64'
+          cache: true
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build overlay
+        shell: cmd
+        working-directory: ReviveOverlay
+        run: qmake && nmake
+
+      - name: Deploy Qt dependencies
+        run: windeployqt --no-translations --qmldir ReviveOverlay Release\ReviveOverlay.exe
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $nsis = 'C:\Program Files (x86)\NSIS'
+          if (-not (Test-Path "$nsis\makensis.exe")) {
+            choco install nsis -y --no-progress
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+
+          $zip = Join-Path $env:RUNNER_TEMP 'AccessControl.zip'
+          $plugin = Join-Path $env:RUNNER_TEMP 'AccessControl'
+          Invoke-WebRequest -Uri 'https://nsis.sourceforge.io/mediawiki/images/4/4a/AccessControl.zip' -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $plugin -Force
+          Copy-Item "$plugin\Plugins\i386-ansi\AccessControl.dll" "$nsis\Plugins\x86-ansi\"
+          Copy-Item "$plugin\Plugins\i386-unicode\AccessControl.dll" "$nsis\Plugins\x86-unicode\"
+
+          # Builds that aren't from a tag are marked as nightly, the installer warns about that
+          $makensisArgs = @()
+          if ($env:GITHUB_REF_TYPE -ne 'tag') { $makensisArgs += '/DNIGHTLY' }
+          $makensisArgs += 'Installer\Revive.nsi'
+          & "$nsis\makensis.exe" $makensisArgs
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: RevivedInstaller
+          path: Installer/RevivedInstaller.exe
+          if-no-files-found: error
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: Revived-binaries
+          path: |
+            Release/ReviveInjector.exe
+            Release/LibRevive*.dll
+            Release/openvr_api*.dll
+          if-no-files-found: error
