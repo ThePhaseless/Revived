@@ -155,6 +155,13 @@ void ovrHmdStruct::UpdateStatus()
 		OutputDebugStringA("\n");
 #endif
 	}
+
+	// The handlers above sample state that may not have settled when the event arrives
+	// (e.g. IsInputAvailable() is still false right after DashboardDeactivated), which leaves
+	// the values stuck until the next event. Re-sample them on every call.
+	Status.HasInputFocus = vr::VRSystem()->IsInputAvailable();
+	Status.OverlayPresent = vr::VROverlay()->IsDashboardVisible();
+	Input->UpdateConnectedControllers();
 }
 
 void ovrHmdStruct::UpdateHmdDesc()

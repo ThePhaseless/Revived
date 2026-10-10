@@ -6,6 +6,7 @@
 
 #include <openvr.h>
 #include <algorithm>
+#include <cmath>
 #include <Windows.h>
 #include <Shlobj.h>
 #include <atlbase.h>
@@ -206,11 +207,50 @@ ovrTouchHapticsDesc InputManager::GetTouchHapticsDesc(ovrControllerType controll
 	return desc;
 }
 
+static bool IsPoseUsable(const vr::TrackedDevicePose_t& pose)
+{
+	if (!pose.bPoseIsValid)
+		return false;
+
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 4; j++)
+		{
+			if (!std::isfinite(pose.mDeviceToAbsoluteTracking.m[i][j]))
+				return false;
+		}
+	}
+	return true;
+}
+
+static REV::Vector3f FiniteOrZero(const vr::HmdVector3_t& v)
+{
+	if (std::isfinite(v.v[0]) && std::isfinite(v.v[1]) && std::isfinite(v.v[2]))
+		return v;
+	return REV::Vector3f();
+}
+
+static void GetPosesForTime(ovrSession session, double absTime, vr::TrackedDevicePose_t* poses)
+{
+	if (absTime > 0.0)
+	{
+		// The compositor only keeps poses for a limited window of frames, the result can't be trusted on failure
+		uint32_t predictionID = (uint32_t)floor(absTime * session->HmdDesc.DisplayRefreshRate);
+		if (vr::VRCompositor()->GetPosesForFrame(predictionID, poses, vr::k_unMaxTrackedDeviceCount) == vr::VRCompositorError_None)
+			return;
+	}
+
+	// Fall back to predicting from the current time, this fills in every pose in the array
+	float secondsFromNow = absTime > 0.0 ? (float)(absTime - ovr_GetTimeInSeconds()) : 0.0f;
+	secondsFromNow = std::min(std::max(secondsFromNow, 0.0f), 0.1f);
+	vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::VRCompositor()->GetTrackingSpace(), secondsFromNow, poses, vr::k_unMaxTrackedDeviceCount);
+}
+
 unsigned int InputManager::TrackedDevicePoseToOVRStatusFlags(vr::TrackedDevicePose_t pose)
 {
 	unsigned int result = 0;
 
-	if (pose.bPoseIsValid)
+	if (IsPoseUsable(pose))
 	{
 		result = ovrStatus_OrientationValid | ovrStatus_PositionValid;
 		if (pose.bDeviceIsConnected)
@@ -226,8 +266,14 @@ unsigned int InputManager::TrackedDevicePoseToOVRStatusFlags(vr::TrackedDevicePo
 ovrPoseStatef InputManager::TrackedDevicePoseToOVRPose(vr::TrackedDevicePose_t pose, ovrPoseStatef& lastPose, double time)
 {
 	ovrPoseStatef result = { OVR::Posef::Identity() };
-	if (!pose.bPoseIsValid)
+	if (!IsPoseUsable(pose))
+	{
+		// Like the Oculus runtime, hold the last known pose rather than snapping to the origin,
+		// the status flags already report the loss of tracking.
+		result.ThePose = lastPose.ThePose;
+		result.TimeInSeconds = time;
 		return result;
+	}
 
 	OVR::Matrix4f matrix = REV::Matrix4f(pose.mDeviceToAbsoluteTracking);
 
@@ -238,10 +284,24 @@ ovrPoseStatef InputManager::TrackedDevicePoseToOVRPose(vr::TrackedDevicePose_t p
 
 	result.ThePose.Orientation = q;
 	result.ThePose.Position = matrix.GetTranslation();
-	result.AngularVelocity = (REV::Vector3f)pose.vAngularVelocity;
-	result.LinearVelocity = (REV::Vector3f)pose.vVelocity;
-	result.AngularAcceleration = ((REV::Vector3f)pose.vAngularVelocity - lastPose.AngularVelocity) / float(time - lastPose.TimeInSeconds);
-	result.LinearAcceleration = ((REV::Vector3f)pose.vVelocity - lastPose.LinearVelocity) / float(time - lastPose.TimeInSeconds);
+	REV::Vector3f angularVelocity = FiniteOrZero(pose.vAngularVelocity);
+	REV::Vector3f linearVelocity = FiniteOrZero(pose.vVelocity);
+	result.AngularVelocity = angularVelocity;
+	result.LinearVelocity = linearVelocity;
+
+	// Poses are often requested more than once for the same time and the clock can step back slightly,
+	// don't divide by a zero or negative delta
+	float dt = float(time - lastPose.TimeInSeconds);
+	if (dt > 1e-4f)
+	{
+		result.AngularAcceleration = (angularVelocity - lastPose.AngularVelocity) / dt;
+		result.LinearAcceleration = (linearVelocity - lastPose.LinearVelocity) / dt;
+	}
+	else
+	{
+		result.AngularAcceleration = lastPose.AngularAcceleration;
+		result.LinearAcceleration = lastPose.LinearAcceleration;
+	}
 	result.TimeInSeconds = time;
 
 	// Store the last pose
@@ -255,18 +315,13 @@ void InputManager::GetTrackingState(ovrSession session, ovrTrackingState* outSta
 	// Get the device poses
 	vr::ETrackingUniverseOrigin origin = vr::VRCompositor()->GetTrackingSpace();
 	vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
-	if (absTime > 0.0f)
-	{
-		uint32_t predictionID = (uint32_t)floor(absTime * session->HmdDesc.DisplayRefreshRate);
-		vr::VRCompositor()->GetPosesForFrame(predictionID, poses, vr::k_unMaxTrackedDeviceCount);
-	}
-	else
-	{
-		vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(origin, 0.0f, poses, vr::k_unMaxTrackedDeviceCount);
-	}
+	GetPosesForTime(session, absTime, poses);
+
+	// An absolute time of zero means "now"
+	double time = absTime > 0.0 ? absTime : ovr_GetTimeInSeconds();
 
 	// Convert the head pose
-	outState->HeadPose = TrackedDevicePoseToOVRPose(poses[vr::k_unTrackedDeviceIndex_Hmd], m_LastPoses[vr::k_unTrackedDeviceIndex_Hmd], absTime);
+	outState->HeadPose = TrackedDevicePoseToOVRPose(poses[vr::k_unTrackedDeviceIndex_Hmd], m_LastPoses[vr::k_unTrackedDeviceIndex_Hmd], time);
 	outState->StatusFlags = TrackedDevicePoseToOVRStatusFlags(poses[vr::k_unTrackedDeviceIndex_Hmd]);
 
 	// Convert the hand poses
@@ -276,7 +331,7 @@ void InputManager::GetTrackingState(ovrSession session, ovrTrackingState* outSta
 	{
 		if (hands[i] == vr::k_unTrackedDeviceIndexInvalid)
 		{
-			outState->HandPoses[i].ThePose = OVR::Posef::Identity();
+			outState->HandPoses[i].ThePose = m_LastHandPose[i].ThePose;
 			continue;
 		}
 
@@ -285,7 +340,7 @@ void InputManager::GetTrackingState(ovrSession session, ovrTrackingState* outSta
 		vr::HmdMatrix34_t offset = REV::Matrix4f(OVR::Matrix4f::RotationX(-MATH_FLOAT_PIOVER4));
 		vr::VRSystem()->ApplyTransform(&pose, &poses[hands[i]], &offset);
 
-		outState->HandPoses[i] = TrackedDevicePoseToOVRPose(pose, m_LastHandPose[i], absTime);
+		outState->HandPoses[i] = TrackedDevicePoseToOVRPose(pose, m_LastHandPose[i], time);
 		outState->HandStatusFlags[i] = TrackedDevicePoseToOVRStatusFlags(pose);
 	}
 
@@ -300,8 +355,10 @@ ovrResult InputManager::GetDevicePoses(ovrSession session, ovrTrackedDeviceType*
 {
 	// Get the device poses
 	vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount];
-	uint32_t predictionID = (uint32_t)floor(absTime * session->HmdDesc.DisplayRefreshRate);
-	vr::VRCompositor()->GetPosesForFrame(predictionID, poses, vr::k_unMaxTrackedDeviceCount);
+	GetPosesForTime(session, absTime, poses);
+
+	// An absolute time of zero means "now"
+	double time = absTime > 0.0 ? absTime : ovr_GetTimeInSeconds();
 
 	// Get the generic tracker indices
 	vr::TrackedDeviceIndex_t trackers[vr::k_unMaxTrackedDeviceCount];
@@ -339,7 +396,7 @@ ovrResult InputManager::GetDevicePoses(ovrSession session, ovrTrackedDeviceType*
 		// If the tracking index is invalid it will fall outside of the range of the array
 		if (index >= vr::k_unMaxTrackedDeviceCount)
 			return ovrError_DeviceUnavailable;
-		outDevicePoses[i] = TrackedDevicePoseToOVRPose(poses[index], m_LastPoses[index], absTime);
+		outDevicePoses[i] = TrackedDevicePoseToOVRPose(poses[index], m_LastPoses[index], time);
 	}
 
 	return ovrSuccess;
