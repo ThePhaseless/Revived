@@ -2,6 +2,7 @@
 #include "Common.h"
 #include "Session.h"
 #include "InputManager.h"
+#include "Log.h"
 #include "ProfileManager.h"
 #include "TextureBase.h"
 
@@ -11,12 +12,14 @@
 
 #include <Windows.h>
 #include <assert.h>
+#include <string.h>
 #include <openvr.h>
 #include <vector>
 #include <algorithm>
 
 #define REV_LAYER_BIAS 0.0001f
 #define ENABLE_DEPTH_SUBMIT 0
+#define REV_MAX_LOGGED_EYE_LAYERS 100
 
 MICROPROFILE_DEFINE(WaitToBeginFrame, "Compositor", "WaitFrame", 0x00ff00);
 MICROPROFILE_DEFINE(BeginFrame, "Compositor", "BeginFrame", 0x00ff00);
@@ -25,6 +28,32 @@ MICROPROFILE_DEFINE(BlitLayers, "Compositor", "BlitLayers", 0x00ff00);
 MICROPROFILE_DEFINE(SubmitLayer, "Compositor", "SubmitLayer", 0x00ff00);
 MICROPROFILE_DEFINE(WaitGetPoses, "Compositor", "WaitGetPoses", 0x00ff00);
 MICROPROFILE_DEFINE(PostPresentHandoff, "Compositor", "PostPresentHandoff", 0x00ff00);
+
+// Logs the eye layer whenever the game changes what it submits, so the actual render resolution can be checked
+static void LogEyeLayer(int eye, const ovrLayerHeader* baseLayer, ovrTextureSwapChain chain, ovrRecti viewport, ovrFovPort fov,
+	const vr::VRTextureBounds_t& bounds)
+{
+	struct EyeLayer
+	{
+		ovrLayerType Type;
+		unsigned int Identifier;
+		ovrRecti Viewport;
+		ovrFovPort Fov;
+	};
+	static EyeLayer lastLayer[ovrEye_Count] = {};
+	static int loggedCount = 0;
+
+	EyeLayer layer = { baseLayer->Type, chain->Identifier, viewport, fov };
+	if (loggedCount >= REV_MAX_LOGGED_EYE_LAYERS || memcmp(&layer, &lastLayer[eye], sizeof(EyeLayer)) == 0)
+		return;
+
+	LogMessage("Eye layer %d: type %d, swapchain %u (%dx%d), viewport %d,%d %dx%d, fov tan L %.3f R %.3f U %.3f D %.3f, bounds u %.3f-%.3f v %.3f-%.3f",
+		eye, layer.Type, chain->Identifier, chain->Desc.Width, chain->Desc.Height, viewport.Pos.x, viewport.Pos.y, viewport.Size.w, viewport.Size.h,
+		fov.LeftTan, fov.RightTan, fov.UpTan, fov.DownTan, bounds.uMin, bounds.uMax, bounds.vMin, bounds.vMax);
+	if (++loggedCount == REV_MAX_LOGGED_EYE_LAYERS)
+		LogMessage("Eye layer: not logging further changes");
+	lastLayer[eye] = layer;
+}
 
 ovrResult CompositorBase::CompositorErrorToOvrError(vr::EVRCompositorError error)
 {
@@ -98,9 +127,15 @@ ovrResult CompositorBase::CreateTextureSwapChain(const ovrTextureSwapChainDesc* 
 		bool success = texture->Init(desc->Type, desc->Width, desc->Height, desc->MipLevels,
 			desc->SampleCount, desc->ArraySize, desc->Format, desc->MiscFlags, desc->BindFlags);
 		if (!success)
+		{
+			LogMessage("Swapchain %u: failed to create a %dx%d texture with format %d", swapChain->Identifier, desc->Width, desc->Height, desc->Format);
 			return ovrError_RuntimeException;
+		}
 		swapChain->Textures[i].reset(texture);
 	}
+
+	LogMessage("Swapchain %u: %dx%d, format %d, %d mips, %d samples, array size %d%s", swapChain->Identifier, desc->Width, desc->Height,
+		desc->Format, desc->MipLevels, desc->SampleCount, desc->ArraySize, desc->StaticImage ? ", static" : "");
 
 	*out_TextureSwapChain = swapChain;
 	return ovrSuccess;
@@ -393,6 +428,8 @@ vr::VRCompositorError CompositorBase::SubmitLayer(ovrSession session, const ovrL
 		bounds.uMax = bounds.uMin + fovBounds.uMax * (bounds.uMax - bounds.uMin);
 		bounds.vMin += fovBounds.vMin * (bounds.vMax - bounds.vMin);
 		bounds.vMax = bounds.vMin + fovBounds.vMax * (bounds.vMax - bounds.vMin);
+
+		LogEyeLayer(i, baseLayer, colorChain, layer.EyeFov.Viewport[i], fov, bounds);
 
 		unsigned int submitFlags = vr::Submit_Default;
 		union

@@ -1,6 +1,8 @@
 #include "Session.h"
+#include "Common.h"
 #include "CompositorBase.h"
 #include "InputManager.h"
+#include "Log.h"
 #include "REV_Math.h"
 
 #include <Windows.h>
@@ -22,7 +24,8 @@ HackInfo g_known_hacks[] = {
 	{ "ultrawings.exe", nullptr, HACK_FAKE_PRODUCT_NAME, true },
 	{ "AirMech.exe", nullptr, HACK_SLEEP_IN_SESSION_STATUS, true },
 	{ nullptr, "lighthouse", HACK_SPOOF_SENSORS, false },
-	{ "DCVR-Win64-Shipping.exe", nullptr, HACK_DISABLE_STATS, true }
+	{ "DCVR-Win64-Shipping.exe", nullptr, HACK_DISABLE_STATS, true },
+	{ "loneecho2.exe", nullptr, HACK_HONOR_PIXEL_DENSITY, true }
 };
 std::map<Hack, HackInfo> g_hacks;
 
@@ -66,6 +69,10 @@ ovrHmdStruct::ovrHmdStruct()
 			g_hacks.emplace(hack.m_hack, hack);
 		}
 	}
+
+	LogMessage("Session for %s, SDK 1.%u, tracking system %s", filename, g_MinorVersion, StringBuffer);
+	for (auto& hack : g_hacks)
+		LogMessage("Using hack %d", hack.first);
 
 	vr::VRApplications()->GetApplicationKeyByProcessId(GetCurrentProcessId(), AppKey, sizeof(AppKey));
 
@@ -243,6 +250,19 @@ void ovrHmdStruct::UpdateHmdDesc()
 	HmdDesc.Resolution = size;
 	HmdDesc.Resolution.w *= 2; // Both eye ports
 	HmdDesc.DisplayRefreshRate = vr::VRSystem()->GetFloatTrackedDeviceProperty(vr::k_unTrackedDeviceIndex_Hmd, vr::Prop_DisplayFrequency_Float);
+
+	LogMessage("HMD: recommended size %dx%d per eye at %.2f Hz", size.w, size.h, HmdDesc.DisplayRefreshRate);
+	for (int eye = 0; eye < ovrEye_Count; eye++)
+	{
+		const ovrEyeRenderDesc& desc = RenderDesc[eye];
+		const OVR::FovPort fov(desc.Fov);
+		float yaw, pitch, roll;
+		OVR::Quatf(desc.HmdToEyePose.Orientation).GetYawPitchRoll(&yaw, &pitch, &roll);
+		LogMessage("Eye %d: fov tan L %.3f R %.3f U %.3f D %.3f (%.1f x %.1f deg), offset %.4f %.4f %.4f m, yaw %.2f pitch %.2f roll %.2f deg",
+			eye, fov.LeftTan, fov.RightTan, fov.UpTan, fov.DownTan, fov.GetHorizontalFovDegrees(), fov.GetVerticalFovDegrees(),
+			desc.HmdToEyePose.Position.x, desc.HmdToEyePose.Position.y, desc.HmdToEyePose.Position.z,
+			OVR::RadToDegree(yaw), OVR::RadToDegree(pitch), OVR::RadToDegree(roll));
+	}
 }
 
 void ovrHmdStruct::UpdateTrackerDesc()

@@ -39,6 +39,11 @@ enum Hack
 	// Hack: Use the same (mirrored) FOV for both eyes.
 	// Stormland renders certain effects at the wrong depth if the eye FOVs do not match.
 	HACK_SAME_FOV_FOR_BOTH_EYES,
+
+	// Hack: Scale the recommended texture size by the requested pixel density.
+	// We normally ignore pixelsPerDisplayPixel and leave the resolution to SteamVR, but then
+	// the resolution setting of games that pass it to ovr_GetFovTextureSize() does nothing.
+	HACK_HONOR_PIXEL_DENSITY,
 };
 
 struct ovrHmdStruct

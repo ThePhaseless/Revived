@@ -6,6 +6,7 @@
 #include "Session.h"
 #include "CompositorBase.h"
 #include "InputManager.h"
+#include "Log.h"
 #include "ProfileManager.h"
 
 #include <dxgi1_2.h>
@@ -18,6 +19,8 @@
 #include <assert.h>
 
 #define REV_DEFAULT_TIMEOUT 10000
+#define REV_MAX_PIXEL_DENSITY 2.0f
+#define REV_MAX_LOGGED_TEXTURE_SIZES 100
 
 HMODULE g_D3D11 = nullptr;
 unsigned int g_MinorVersion = OVR_MINOR_VERSION;
@@ -842,11 +845,30 @@ OVR_PUBLIC_FUNCTION(ovrSizei) ovr_GetFovTextureSize(ovrSession session, ovrEyeTy
 	const ovrEyeRenderDesc& desc = session->RenderDesc[eye];
 	ovrSizei size = desc.DistortedViewport.Size;
 
+	// The resolution is left to SteamVR, unless the game's own resolution setting depends on the pixel density
+	float density = 1.0f;
+	if (session->UseHack(HACK_HONOR_PIXEL_DENSITY) && pixelsPerDisplayPixel > 0.0f)
+		density = std::min(pixelsPerDisplayPixel, REV_MAX_PIXEL_DENSITY);
+
 	// Grow the recommended size to account for the overlapping fov
-	// TODO: Add a setting to ignore pixelsPerDisplayPixel
 	vr::VRTextureBounds_t bounds = CompositorBase::FovPortToTextureBounds(desc.Fov, fov);
-	size.w = int(size.w / (bounds.uMax - bounds.uMin));
-	size.h = int(size.h / (bounds.vMax - bounds.vMin));
+	size.w = int(size.w * density / (bounds.uMax - bounds.uMin));
+	size.h = int(size.h * density / (bounds.vMax - bounds.vMin));
+
+	// Log every distinct request, but games with a dynamic resolution may change it every frame
+	static int loggedCount = 0;
+	static float lastPixelsPerDisplayPixel[ovrEye_Count] = {};
+	static ovrSizei lastSize[ovrEye_Count] = {};
+	if (loggedCount < REV_MAX_LOGGED_TEXTURE_SIZES && (pixelsPerDisplayPixel != lastPixelsPerDisplayPixel[eye] ||
+		size.w != lastSize[eye].w || size.h != lastSize[eye].h))
+	{
+		LogMessage("ovr_GetFovTextureSize: eye %d, fov tan L %.3f R %.3f U %.3f D %.3f, pixelsPerDisplayPixel %.3f (using %.3f) -> %dx%d",
+			eye, fov.LeftTan, fov.RightTan, fov.UpTan, fov.DownTan, pixelsPerDisplayPixel, density, size.w, size.h);
+		if (++loggedCount == REV_MAX_LOGGED_TEXTURE_SIZES)
+			LogMessage("ovr_GetFovTextureSize: not logging further changes");
+		lastPixelsPerDisplayPixel[eye] = pixelsPerDisplayPixel;
+		lastSize[eye] = size;
+	}
 
 	return size;
 }

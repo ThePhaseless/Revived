@@ -10,11 +10,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - GitHub Actions workflow that builds the runtimes, overlay and installer on every push.
+- Revive: diagnostic log `LibRevive_<game>.txt` in the data folder, with the headset's field of view and eye transforms, every distinct texture size the game requests, created swapchains and changes to the submitted eye layers.
 
 ### Fixed
 
 - Revive: input focus, dashboard visibility and connected controllers are re-read on every session status poll, so a game no longer stays without input focus after the SteamVR dashboard closes (Lone Echo II's UI pointer not coming back).
 - Revive: pose conversion falls back to predicting from the current time when the compositor has no poses for the requested frame, no longer divides by a zero time step, reports non-finite poses as untracked and holds the last known pose on tracking loss.
+- Revive: Lone Echo II's requested pixel density is applied to the recommended texture size (capped at 2x), so a resolution setting that goes through `ovr_GetFovTextureSize()` is no longer ignored.
 - Build fixes for VS2022.
 
 ## [3.4.0] - 2026-04-24

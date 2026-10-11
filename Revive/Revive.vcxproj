@@ -343,6 +343,7 @@
     <ClInclude Include="ProfileManager.h" />
     <ClInclude Include="REV_Math.h" />
     <ClInclude Include="InputManager.h" />
+    <ClInclude Include="Log.h" />
     <ClInclude Include="Session.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="TextureBase.h" />
@@ -364,6 +365,7 @@
     <ClCompile Include="ProfileManager.cpp" />
     <ClCompile Include="REV_CAPI_Vk.cpp" />
     <ClCompile Include="InputManager.cpp" />
+    <ClCompile Include="Log.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="microprofile.cpp" />
     <ClCompile Include="REV_CAPI.cpp" />
