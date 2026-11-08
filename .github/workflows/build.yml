@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           submodules: recursive
 
@@ -36,7 +36,7 @@ jobs:
           "commit=$(git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD)" >> $env:GITHUB_OUTPUT
 
       - name: Cache vcpkg packages
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ steps.vcpkg.outputs.path }}
           key: vcpkg-${{ steps.vcpkg.outputs.commit }}-detours-openxr-loader-glfw3
@@ -52,7 +52,7 @@ jobs:
           }
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v3
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       # The projects target the VS2019 toolset, but the vcpkg libraries are built with the runner's
       # VS2026 toolset and don't link against older ones.
@@ -70,7 +70,7 @@ jobs:
           cache: true
 
       - name: Setup MSVC environment
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           arch: x64
 
@@ -105,14 +105,14 @@ jobs:
           & "$nsis\makensis.exe" $makensisArgs
 
       - name: Upload installer
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: RevivedInstaller
           path: Installer/RevivedInstaller.exe
           if-no-files-found: error
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: Revived-binaries
           path: |
